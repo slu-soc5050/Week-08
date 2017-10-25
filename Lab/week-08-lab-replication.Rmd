@@ -1,0 +1,396 @@
+---
+title: "Lab-08 Replication File"
+author: "Christopher Prener, Ph.D."
+date: "`r Sys.Date()`"
+output: html_notebook
+---
+
+## Introduction
+This is the replication file for Lab 08.
+
+## Dependencies
+This file requires the following packages for data:
+
+```{r}
+library(testDriveR)
+```
+
+It also requires functions from the following packages:
+
+```{r}
+library(broom)      # tidy output
+library(car)        # statistical testing
+library(dplyr)      # wrangling data
+library(effsize)    # effect size calculations
+library(ggplot2)    # plots
+library(ggridges)   # ridge plots
+library(moments)    # normality testing
+library(nortest)    # normality testing
+library(pwr)        # power and sample size calculations
+library(stargazer)  # latex output
+library(tidyr)      # reshping data
+```
+
+## Load Data
+
+We'll start by loading the data from the updated `testDriveR` package into a new data frame called `mortality`.
+
+```{r}
+mortality <- childMortality
+```
+
+
+## Part 1: Data Preparation
+### Question 1
+
+We are specifically interested in highlighting African nations. The following code creates the logical variable for African nations:
+
+```{r}
+mortality <- mutate(mortality, africa = ifelse(continent == "Africa", TRUE, FALSE))
+```
+
+### Question 2
+
+Question 2 asks you to subset the data so that we highlight a particular series of observations. These data contain multiple years worth of information, and we want to pull out observations that meet two criteria. We can do this two ways, both of which involve the `filter()` function. The first technique uses pipes and two calls of `filter()`, one for each condition. The output is passed to a new object called `neonate15`.
+
+```{r}
+mortality %>%
+  filter(year == 2015) %>%
+  filter(category == "neonate_MR") -> neonate15
+```
+
+The second technique uses the logical operator `&` ("and") to connect both the `year` and `category` conditions into a single call of `filter()`. 
+
+```{r}
+neonate15 <- filter(mortality, year == 2015 & category == "neonate_MR") 
+```
+
+Both techniques produce the same ultimate output. I tend to think the second approach is easier to read if there are only two conditions. When the condition statements get more complext, it is advisable to break them up into different calls of `filter()`. We now have long-formatted data that can be used for plotting.
+
+### Question 3
+
+Question 3 asks you to make a second subset of the data. Like the previous question, we can accomplish this in two ways. The first uses pipes and two calls of `filter()`.
+
+```{r}
+mortality %>% 
+  filter(year == 1995 | year == 2015) %>%
+  filter(category == "under5_MR") -> mortality05
+```
+
+The second technique uses two logical operators - `&` ("and") and `|` ("or") to accomplish the same output in a single line of code. Note how parentheses are used to introduce order of operations rules into the call.
+
+```{r}
+mortality05 <- filter(mortality, (year == 1995 | year == 2015) & category == "neonate_MR") 
+```
+
+Again, both approaches work. With this example, however, you start to see how layering additional complexity in a single `filter()` can make it harder to understand intuitively what is happening in the function. We now have long-formatted data that can be used for plotting.
+
+### Question 4
+
+Finally, we want to convert our data, which are long, to wide. We use `select()` to pull out the critical variables and then `spread()` to convert those data to wide:
+
+```{r}
+mortality05 %>%
+  select(countryName, year, estimate) %>%
+  spread(key = year, value = estimate) -> mortality05_wide
+```
+
+This creates a spreadsheet-like format for our data that can be used for hypothesis testing.
+
+## Part 2: One-sample T Test
+### Question 5
+
+The following function will give us the average number of neno-natal deaths:
+
+```{r}
+mean(neonate15$estimate)
+```
+
+The units here are rates - these are the number of fatalaties per 1,000 live births in each country. On average, there were 13.607 deaths per 1,000 live births in 2015. 
+
+### Question 6
+
+We can test whether these data are drawn from a population has a value of $\mu = 15$ using a one-sample t test.
+
+```{r}
+t.test(neonate15$estimate, mu = 15)
+```
+
+The results of the one-sample t test ($t = -1.728, p = .086$) suggest that these data ($\bar{x} = 13.607$) could indeed have been drawn from a population that has a mean of 15 (since the results were *not* statistically significant).
+
+### Question 7
+
+We can test whether these data are drawn from a population has a value of $\mu = 12$ using a one-sample t test.
+
+```{r}
+t.test(neonate15$estimate, mu = 12)
+```
+
+The results of the one-sample t test ($t = 1.993, p = .048$) suggest that these data ($\bar{x} = 13.607$) are not likely to be drawn from a population that has a mean of 12 (since the results *were* statistically significant.)
+
+## Part 3: Independent T Test
+### Question 8
+
+We can test one of the key assumptions of the independent t test with the Levene's test, which assesses homogeneity of variance. The following code calculates that test using the `leveneTest()` function:
+
+```{r}
+leveneTest(estimate ~ africa, data = neonate15)
+```
+
+The results of the Levene's test ($f = 6.526, p = .011$) suggest that the homogeneity of variance assumption does not hold. The variance in neonatal mortality rates among African nations is substantively different from the variance in neonatal mortality rates among non-African countries.
+
+### Question 9
+The other assumptions of the independent t test are as follows:
+
+1. The dependent variable, `estimate`, is indeed continuous
+2. The dependent variable, `estimate`, should not be considered normally distributed (see code and explanation below). *This violates one of the assumptions!*
+3. The homogeneity of variance assumption also does not hold.
+4. The observations are independent - there is not a clear causal relationship between one country's neonatal mortality rate and another's (at least not a simple causal relationship).
+
+#### Testing Normality
+
+We can start by easily calculating descriptive statistics using the `summary()` function:
+
+```{r}
+summary(neonate15$estimate)
+```
+
+Note how half the observations are below the median value of 9.8, but there is a *long* right tail that stretches to nearly 50.
+
+We can see this reflected in a histogram of these data:
+
+```{r}
+ggplot(data = neonate15, mapping = aes(estimate)) +
+  geom_histogram()
+```
+
+Surprisingly, the right tail seen above in the histogram is not reflected as strongly in the skewness and kurtosis assessments:
+
+```{r}
+skewness(neonate15$estimate)
+kurtosis(neonate15$estimate)
+```
+
+Both of these values suggest a variable that is roughly normally distributed, if slightly platykurtic in nature.
+
+The qqplot shows us the degree of the departure from normality on the left side of the distribution:
+
+```{r}
+qqnorm(neonate15$estimate); qqline(neonate15$estimate)
+```
+
+This plot conflicts with the skew and kurtosis values, but given the histogram above, I would give the qqplot more weight. We can confirm our suspiscion of non-normality using the Shaprio-Francia test. Remember that there is a limit to observations for the Shapiro-Francia test. While the original data would not be appropriate for these data, our subset version fits comfortable within the appropriate sample size boundaries.
+
+```{r}
+sf.test(neonate15$estimate)
+```
+
+The results of the Shapiro-Francia test ($W = .899, p < .001$) suggests that these data are not normally distributed. *In sum*, the indicators are that these data are not normally distributed. This means that our findings with the independent t test should be treated with caution.
+
+### Question 10
+
+The following code calculates the independent t test:
+
+```{r}
+t.test(estimate ~ africa, data = neonate15, var.equal = FALSE)
+```
+
+The results of the independent t test ($t = -10.876$) suggest that the mean 2015 neonatal mortality rates for African countries ($\bar{x} = 25.435$) are not equal to the mean 2015 neonatal mortality rates for non-African countries ($\bar{x} = 9.077$). African nations have far higher average neonatal mortality rates compared to the rest of the world.
+
+### Question 11
+
+The following code calculates an effect size for the relationship between our independent and dependent variables:
+
+```{r}
+cohen.d(estimate ~ africa, data = neonate15, pooled = FALSE, paired = FALSE)
+```
+
+The results of the effect size test, which reports Glass's $\Delta$ instead of Cohen's $D$ since we set `pooled = FALSE`, suggest a large effect size of $\Delta = -1.656$. This indicates that this relationship is not only statistically significant but has substantial real world import as well. 
+
+### Question 12
+
+The following code creates the requested boxplot:
+
+```{r}
+ggplot(data = neonate15, mapping = aes(x = africa, y = estimate)) +
+  geom_boxplot()
+```
+
+We can see the large difference in median mortality rates (the think horizontal line across each block) as well as the differences in the inter-quartile ranges of each group (the boxes themselves). What is striking about this plot is that outliers in the non-African country categroy begin at 25, which is *less* than the *median* mortality rates for African countries.
+
+We can also see this in the requested violin plot:
+
+```{r}
+ggplot(data = neonate15, mapping = aes(x = africa, y = estimate)) +
+  geom_violin(mapping = aes(fill = africa))
+```
+
+The bulk of the non-African countries fall well below the center mass of the African countries.
+
+## Part 4: Dependent T Test
+### Question 13
+
+The following code calculates the *difference* between 1995 and 2005 in the wide version of the longitudinal data:
+
+```{r}
+mortality05_wide <- mutate(mortality05_wide, yDiff = `2015`-`1995`)
+```
+
+With our new variable `yDiff`, we can test normality and assess the critical assumption of the dependent t test. First, we calculate basic descriptive statistics:
+
+```{r}
+summary(mortality05_wide$yDiff)
+```
+
+Then we can calculate the skew and kurtosis values for this distribution:
+
+```{r}
+skewness(mortality05_wide$yDiff)
+kurtosis(mortality05_wide$yDiff)
+```
+
+We have a distribution with some degree of negative skew and that is leptokurtic. Next, we can produce a qqplot:
+
+```{r}
+qqnorm(mortality05_wide$yDiff); qqline(mortality05_wide$yDiff)
+```
+
+The plot shows departures from normality in both tails, which we can confirm with the Shapiro-Francia test:
+
+```{r}
+sf.test(mortality05_wide$yDiff)
+```
+
+Overall, these tests suggest that the difference between 1995 and 2005 is not normally distributed.
+
+### Question 14
+
+The other assumptions of the dependent t test are as follows:
+
+1. The dependent variable, `estimate` is indeed continuous. 
+2. We have a binary set of categories (1995 and 2005)
+3. The homogeneity of variance assumption in `estimate` between 1995 and 2005 does not hold. *We should treat our results with caution.* (see output below)
+4. The scores are dependent, since they are for the same countries.
+
+#### Homogeneity of Variance assumption testing
+
+We can continue to use the Levene's test with our *long* formatted data to check this assumption:
+
+```{r}
+leveneTest(estimate ~ year, data = mortality05)
+```
+
+The results of the Levene's test ($f = 22.76, p < .001$) suggest that the homogeneity of variance assumption does not hold. The variance in under-5 mortality rates among countries in 1995 is substantively different from the variance in under-5 mortality rates among countries in 2015.
+
+### Question 15
+
+The following code calculates the dependent t test between 1995 and 2015:
+
+```{r}
+t.test(mortality05_wide$`1995`, mortality05_wide$`2015`, paired = TRUE)
+```
+
+To help interpret these results, we also need the means for each year:
+
+```{r}
+mean(mortality05_wide$`1995`)
+mean(mortality05_wide$`2015`)
+```
+
+The results of the dependent t test ($t = 12.199, p < .001$) suggest that there has been a substantive shift in under-5 mortality rates from 1995 ($\bar{x} = 65.913$) to 2015 (\bar{x} = 31.78). Mortality rates have decline during this period.
+
+We can also calculate the dependent t test using the long data:
+
+```{r}
+t.test(estimate ~ year, data = mortality05, paired = TRUE)
+```
+
+### Question 16
+
+The following code uses the *long* formatted data to calculate an effect size using Cohen's $D$:
+
+```{r}
+cohen.d(estimate ~ year, data = mortality05, paired = TRUE)
+```
+
+The results of the Cohen's $D$ suggest that the real world impact is small ($D = .415$). This is a slightly counter intutive finding, given that mortality rates have halved. I see this as an area where effect sizes imperfectly capture relationships - it is important to understand the context that findings are in, and effect sizes help, but the public health benefits of this shift are substantial and should not be undermined by the effect size here.
+
+As an aside, the code used for the *long* formatted data was used because of an error generated when attempting to format the code as per the slides.
+
+### Question 17
+
+The following code creates the requested boxplot:
+
+```{r}
+ggplot(data = mortality05, mapping = aes(x = as.character(year), y = estimate)) +
+  geom_boxplot()
+```
+
+We get some indication here of why the effect size is not as large as we may have thought it would be. Effect sizes look at the overlap between the two groups in terms of standard deviations. There is still a substantial amount of overlap here since the boxes are parallel with each other. The boxplot also shows, however, that the interquartile range has narrowed significantly and the outliers are far smaller in terms of their estimate values than in 1995.
+
+We can also create a ridge plot:
+
+```{r}
+mortality05 <- mutate(mortality05, year = as.character(year))
+
+ggplot(data = mortality05) +
+  geom_density_ridges(mapping = aes(x = estimate, y = year))
+```
+
+We can see here that the ridge plot shows fewer observations in the tail and far more in the center mass of the 2015 distribution. This reflects the difference in size in the boxplots.
+
+## Part 5
+### Question 18
+
+The following code produces a sample size estimate for a test with these paramters:
+
+1. Independent t test with two-sided significance testing
+2. $D = .2$
+3. $\alpha = .05$
+4. $power = .9$
+
+```{r}
+pwr.t.test(d = .2, power = .9, sig.level = .05, type = "two.sample", alternative = "two.sided")
+```
+
+Given these parameters, we need at least 527 respondents in each group.
+
+### Question 19
+
+The following code produces a sample size estimate for a test with these paramters:
+
+1. Dependent t test with two-sided significance testing
+2. $D = .5$
+3. $\alpha = .05$
+4. $power = .8$
+
+```{r}
+pwr.t.test(d = .5, power = .8, sig.level = .05, type = "paired", alternative = "two.sided")
+```
+
+Given these parameters, we need at least 34 respondents in each group.
+
+### Question 20
+
+The following code produces a sample size estimate for a test with these paramters:
+
+1. Independent t test with two-sided significance testing
+2. $D = .8$
+3. $\alpha = .05$
+4. $power = .75$
+
+```{r}
+pwr.t.test(d = .8, power = .75, sig.level = .05, type = "two.sample", alternative = "two.sided")
+```
+
+Given these paramters, we need at least 23 respondents in each group.
+
+## Part 6
+### Question 21
+
+The follow code produces our LaTeX output:
+
+```{r}
+stargazer(as.data.frame(neonate15), title = "Descriptive Statistics, Neonatal Mortality (2015)")
+```
+
