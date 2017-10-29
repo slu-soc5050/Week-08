@@ -261,7 +261,7 @@ The plot shows departures from normality in both tails, which we can confirm wit
 sf.test(mortality05_wide$yDiff)
 ```
 
-Overall, these tests suggest that the difference between 1995 and 2005 is not normally distributed.
+The Shapiro-Francia test results ($W = 0.929, p < .001$) suggest that the difference between 1995 and 2015 is not normally distributed. This finding fits the larger pattern in these tests. Overall, these tests suggest that the difference between 1995 and 2005 is not normally distributed.
 
 ### Question 14
 
@@ -277,7 +277,7 @@ The other assumptions of the dependent t test are as follows:
 We can continue to use the Levene's test with our *long* formatted data to check this assumption:
 
 ```{r}
-leveneTest(estimate ~ year, data = mortality05)
+leveneTest(estimate ~ as.character(year), data = mortality05)
 ```
 
 The results of the Levene's test ($f = 22.76, p < .001$) suggest that the homogeneity of variance assumption does not hold. The variance in under-5 mortality rates among countries in 1995 is substantively different from the variance in under-5 mortality rates among countries in 2015.
@@ -297,7 +297,7 @@ mean(mortality05_wide$`1995`)
 mean(mortality05_wide$`2015`)
 ```
 
-The results of the dependent t test ($t = 12.199, p < .001$) suggest that there has been a substantive shift in under-5 mortality rates from 1995 ($\bar{x} = 65.913$) to 2015 (\bar{x} = 31.78). Mortality rates have decline during this period.
+The results of the dependent t test ($t = 17.627, p < .001$) suggest that there has been a substantive shift in under-5 mortality rates from 1995 ($\bar{x} = 22.82$) to 2015 (\bar{x} = 13.607). Mortality rates have decline during this period.
 
 We can also calculate the dependent t test using the long data:
 
@@ -319,14 +319,15 @@ As an aside, the code used for the *long* formatted data was used because of an 
 
 ### Question 17
 
-The following code creates the requested boxplot:
+The following code creates the requested violin plot:
 
 ```{r}
-ggplot(data = mortality05, mapping = aes(x = as.character(year), y = estimate)) +
-  geom_boxplot()
+ggplot(data = mortality05, mapping = aes(x = as.character(year), y = estimate, 
+                                         fill = as.character(year))) +
+  geom_violin()
 ```
 
-We get some indication here of why the effect size is not as large as we may have thought it would be. Effect sizes look at the overlap between the two groups in terms of standard deviations. There is still a substantial amount of overlap here since the boxes are parallel with each other. The boxplot also shows, however, that the interquartile range has narrowed significantly and the outliers are far smaller in terms of their estimate values than in 1995.
+We get some indication here of why the effect size is not as large as we may have thought it would be. Effect sizes look at the overlap between the two groups in terms of standard deviations. There is still a substantial amount of overlap here since the boxes are parallel with each other. The violin also shows, however, that the range has narrowed significantly and the outliers are far smaller in terms of their estimate values than in 1995.
 
 We can also create a ridge plot:
 
@@ -337,7 +338,9 @@ ggplot(data = mortality05) +
   geom_density_ridges(mapping = aes(x = estimate, y = year))
 ```
 
-We can see here that the ridge plot shows fewer observations in the tail and far more in the center mass of the 2015 distribution. This reflects the difference in size in the boxplots.
+We can see here that the ridge plot shows fewer observations in the tail and far more in the center mass of the 2015 distribution. This reflects the difference in size in the violin plot.
+
+Personally, I find the ridge plot to be more effective in this case. I think that you get a better sense of where outliers are and how under-5 mortality rates are becoming lower on average with the ridge plot than with the violin plot.
 
 ## Part 5
 ### Question 18
